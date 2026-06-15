@@ -22,7 +22,7 @@ class Settings:
     llm_temperature: float | None = (
         float(_raw_temp) if _raw_temp is not None and float(_raw_temp) != -10 else None
     )
-	INCLUDE_FULL_HISTORY : bool = str(os.getenv("INCLUDE_FULL_HISTORY", "False")).strip().lower() == "true"
+    INCLUDE_FULL_HISTORY : bool = str(os.getenv("INCLUDE_FULL_HISTORY", "False")).strip().lower() == "true"
     kafka_bootstrap_servers : str = os.getenv("KAFKA_URL", "localhost:9092")
     template_folder : str = os.getenv("TEMPLATE_FOLDER", "")
 
