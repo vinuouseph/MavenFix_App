@@ -78,8 +78,8 @@ async def stream_project_pipeline(project_id: int, db: Session = Depends(get_db)
 
             for line in lines:
                 yield line
-                if "success" in line or "abort" in line or "escalate" in line:
-                    if '\"type\": \"trace\"' in line and ('\"id\": \"success\"' in line or '\"id\": \"abort\"' in line or '\"id\": \"escalate\"' in line):
+                if "success" in line or "abort" in line or "escalate" in line or "pre_compile_failed" in line:
+                    if '\"type\": \"trace\"' in line and ('\"id\": \"success\"' in line or '\"id\": \"abort\"' in line or '\"id\": \"escalate\"' in line or '\"id\": \"pre_compile_failed\"' in line):
                         return
             
             await asyncio.sleep(0.5)

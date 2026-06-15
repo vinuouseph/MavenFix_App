@@ -142,7 +142,12 @@ def get_initial_state(project_path : str, build_args: str = None) -> dict:
         "status": "running",
         "final_message": "",
         "vuln_summary": "",
-        "vuln_updates": []
+        "vuln_updates": [],
+        "full_diff": "",
+        "all_errors_fixed": [],
+        "matched_known_errors": [],
+        "java_version": "unknown",
+        "past_messages": [],
     }
 
     return initial_state

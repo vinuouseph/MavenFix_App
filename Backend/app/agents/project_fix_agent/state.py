@@ -50,3 +50,11 @@ class AgentState(TypedDict):
     # ── Diff Tracking ─────────────────────────────────────────────────────────
     full_diff: str
 
+    # ── VectorDB / Knowledge Base ─────────────────────────────────────────────
+    all_errors_fixed: list[dict]       # all errors seen across iterations (for VDB storage)
+    matched_known_errors: list[str]    # errors resolved via VDB (skip re-storage)
+    java_version: str                  # detected Java version (e.g. "17", "21")
+
+    # ── Full conversation history (when INCLUDE_FULL_HISTORY=True) ────────────
+    past_messages: list
+

@@ -123,6 +123,33 @@ def _compact_file_tree(work_dir: str, max_files: int = 80) -> str:
     return "\n".join(lines)
 
 
+def _detect_java_version(work_dir: str) -> str:
+    """Try to detect the Java version from pom.xml or build.gradle."""
+    root = Path(work_dir)
+    for pom in root.rglob("pom.xml"):
+        try:
+            text = pom.read_text(encoding="utf-8", errors="ignore")
+            # Try <java.version>17</java.version>
+            m = re.search(r"<java\.version>\s*(\d+)\s*</java\.version>", text)
+            if m:
+                return m.group(1)
+            # Try <maven.compiler.source>17</maven.compiler.source>
+            m = re.search(r"<maven\.compiler\.source>\s*([\d.]+)\s*</maven\.compiler\.source>", text)
+            if m:
+                return m.group(1)
+            # Try <maven.compiler.target>
+            m = re.search(r"<maven\.compiler\.target>\s*([\d.]+)\s*</maven\.compiler\.target>", text)
+            if m:
+                return m.group(1)
+            # Try <release>17</release> in maven-compiler-plugin
+            m = re.search(r"<release>\s*(\d+)\s*</release>", text)
+            if m:
+                return m.group(1)
+        except Exception:
+            pass
+    return "unknown"
+
+
 # ── Node ──────────────────────────────────────────────────────────────────────
 
 def build_context_node(state: AgentState, config: RunnableConfig) -> AgentState:
@@ -248,10 +275,18 @@ def build_context_node(state: AgentState, config: RunnableConfig) -> AgentState:
         config=config,
     )
 
+    # Detect Java version on first iteration (for VectorDB metadata)
+    java_version = state.get("java_version", "unknown")
+    if java_version == "unknown":
+        java_version = _detect_java_version(work_dir)
+        if java_version != "unknown":
+            logger.info(f"[project_fix/build_context] Detected Java version: {java_version}")
+
     return {
         **state,
         "context_window":        context_window,
         "context_token_estimate": token_estimate,
         "seen_fingerprints":     updated_fps,
         "fingerprint_counts":    counts,
+        "java_version":          java_version,
     }

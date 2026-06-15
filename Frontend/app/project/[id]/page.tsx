@@ -16,7 +16,7 @@ interface ProjectData {
   project_description?: string;
   project_type: string;
   git_repo_url: string;
-  status: 'running' | 'success' | 'abort' | 'escalate' | 'pending';
+  status: 'running' | 'success' | 'abort' | 'escalate' | 'pre_compile_failed' | 'pending';
 }
 
 // ─── Status config ─────────────────────────────────────────────────────────────
@@ -26,6 +26,7 @@ const STATUS_COLOR: Record<string, string> = {
   success: '#10b981',
   abort: '#ef4444',
   escalate: '#f97316',
+  pre_compile_failed: '#ef4444',
   pending: '#64748b',
 };
 
@@ -184,12 +185,11 @@ export default function ProjectDetailPage() {
         // ── Terminal status ───────────────────────────────────────────────
         if (type === 'trace') {
           const stepId = (data.id as string) ?? '';
-          if (['success', 'abort', 'escalate'].includes(stepId)) {
+          if (['success', 'abort', 'escalate', 'pre_compile_failed'].includes(stepId)) {
             setProject((prev) =>
               prev ? { ...prev, status: stepId as ProjectData['status'] } : prev
             );
-            if (stepId === 'success') es.close();
-            if (stepId === 'abort' || stepId === 'escalate') es.close();
+            if (['success', 'abort', 'escalate', 'pre_compile_failed'].includes(stepId)) es.close();
           }
         }
       } catch {

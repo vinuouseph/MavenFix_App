@@ -10,7 +10,7 @@ from app.agents.project_fix_agent.state import AgentState
 
 logger = logging.getLogger(__name__)
 
-_STUCK_THRESHOLD = 10   # how many times the same fingerprint before "stuck"
+_STUCK_THRESHOLD = 5    # how many times the same fingerprint before "stuck"
 
 
 # ── Conditional router: after parse_errors ─────────────────────────────────────
@@ -59,8 +59,12 @@ def _score_and_store_fixes(state: AgentState, config: RunnableConfig) -> None:
     full_diff       = state.get("full_diff", "")
     java_version    = state.get("java_version") or "unknown"
 
-    if not errors or not full_diff.strip():
+    if not errors:
+        logger.info("[success_node] No errors recorded — skipping VectorDB store")
         return
+
+    # Use diff if available, otherwise note it was unavailable
+    diff_text = full_diff.strip() if full_diff.strip() else "(diff not captured — fixes were applied via tool calls)"
         
     dispatch_custom_event(
         "project_fix_trace",
@@ -93,7 +97,7 @@ def _score_and_store_fixes(state: AgentState, config: RunnableConfig) -> None:
         human_msg = HumanMessage(
             content=(
                 f"Compiler errors that were fixed:\n{error_texts}\n\n"
-                f"Diff applied:\n{full_diff[:3000]}\n\n"
+                f"Diff applied:\n{diff_text[:3000]}\n\n"
                 "Rate each fix and reply in the required JSON format."
             )
         )
@@ -155,7 +159,7 @@ def _score_and_store_fixes(state: AgentState, config: RunnableConfig) -> None:
         )
 
     except Exception as exc:
-        logger.warning(f"[success_node] _score_and_store_fixes failed: {exc}")
+        logger.warning(f"[success_node] _score_and_store_fixes failed: {exc}", exc_info=True)
         dispatch_custom_event(
             "project_fix_trace",
             {"id": "vdb_store", "status": "error", "title": "Knowledge Base Update Failed", "detail": "Failed to store learned fixes."},
@@ -240,6 +244,6 @@ def pre_compile_escalate_node(state: AgentState, config: RunnableConfig) -> Agen
     )
     return {
         **state,
-        "status": "escalate",
+        "status": "pre_compile_failed",
     }
 

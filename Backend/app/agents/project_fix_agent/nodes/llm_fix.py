@@ -218,7 +218,7 @@ def llm_fix_agent_node(state: AgentState, config: RunnableConfig) -> AgentState:
                 if err["error_code"] not in matched_known_errors:
                     matched_known_errors.append(err["error_code"])
         except Exception as exc:
-            logger.debug(f"[project_fix/llm_fix] VectorDB search failed: {exc}")
+            logger.debug(f"[project_fix/llm_fix] VectorDB search failed for error: {exc}")
 
     dispatch_custom_event(
         "project_fix_trace",
@@ -368,11 +368,11 @@ def llm_fix_agent_node(state: AgentState, config: RunnableConfig) -> AgentState:
                     tool_results_executed = True
                     continue
 
-                # ── Guardrail: cap writes per file to 2 ───────────────────────
+                # ── Guardrail: cap writes per file to 3 ───────────────────────
                 if tool_name == "write_file_lines":
                     fpath = tool_args.get("relative_path", "")
                     _writes_per_file[fpath] = _writes_per_file.get(fpath, 0) + 1
-                    if _writes_per_file[fpath] > 2:
+                    if _writes_per_file[fpath] > 3:
                         logger.warning(f"[project_fix/llm_fix] Capping writes to {fpath} (already written {_writes_per_file[fpath]-1}x)")
                         messages.append(ToolMessage(
                             content=f"GUARDRAIL: {fpath} has already been written {_writes_per_file[fpath]-1} times this iteration. "
@@ -381,6 +381,33 @@ def llm_fix_agent_node(state: AgentState, config: RunnableConfig) -> AgentState:
                         ))
                         tool_results_executed = True
                         continue
+
+                # ── Guardrail: block duplicate config class creation ───────────
+                if tool_name == "create_new_file":
+                    fpath = tool_args.get("relative_path", "")
+                    if fpath.endswith(".java"):
+                        import os as _os
+                        new_dir  = _os.path.dirname(fpath)
+                        new_base = _os.path.basename(fpath).replace(".java", "").lower()
+                        # Check for similarly-named files in the same package
+                        for existing in files_patched:
+                            if _os.path.dirname(existing) == new_dir:
+                                existing_base = _os.path.basename(existing).replace(".java", "").lower()
+                                # e.g. "securityconfigrewritten" vs "securityconfig"
+                                if existing_base in new_base or new_base in existing_base:
+                                    logger.warning(f"[project_fix/llm_fix] Blocking duplicate config creation: {fpath} (similar to {existing})")
+                                    messages.append(ToolMessage(
+                                        content=f"GUARDRAIL: {fpath} looks like a duplicate of {existing}. "
+                                                f"Do NOT create duplicate config classes — fix the existing file instead "
+                                                f"using read_file_lines + write_file_lines.",
+                                        tool_call_id=tool_id, name=tool_name
+                                    ))
+                                    tool_results_executed = True
+                                    break
+                        if not tool_results_executed and tool_name == "create_new_file":
+                            pass  # allow creation to proceed below
+                        elif tool_results_executed:
+                            continue
 
                 dispatch_custom_event(
                     "project_fix_trace",

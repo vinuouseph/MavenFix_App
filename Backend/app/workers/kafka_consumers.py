@@ -18,7 +18,7 @@ from app.workers.models import SpringFixKafka, SpringFixResult
 from app.db_configs.db_configuration import SessionLocal
 from app.repository.git_repo_repository import GitRepoRepository
 
-broker = KafkaBroker(settings.kafka_bootstrap_servers)
+broker = KafkaBroker(settings.kafka_bootstrap_servers, max_poll_interval_ms=3600000)
 app = FastStream(broker)
 
 @broker.subscriber(

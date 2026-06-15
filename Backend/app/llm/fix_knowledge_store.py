@@ -20,6 +20,7 @@ Collection / index name: VECTOR_DB_COLLECTION (default: "fix_knowledge").
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 
 from app.core.config import settings
@@ -30,7 +31,7 @@ logger = logging.getLogger(__name__)
 COLLECTION_NAME = settings.VECTOR_DB_COLLECTION
 VECTOR_DIM      = settings.EMBEDDING_DIMENSION  # e.g., 1536 or 3072 depending on model
 CONFIDENCE_MIN  = 90             # only store fixes with score >= this
-SIMILARITY_MIN  = 0.90           # cosine similarity threshold for retrieval
+SIMILARITY_MIN  = 0.75           # cosine similarity threshold for retrieval
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -135,6 +136,20 @@ def _milvus_search(client, vector: list[float]) -> tuple[str | None, float]:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# Error text normalisation (strip file paths + line numbers for better matching)
+# ═════════════════════════════════════════════════════════════════════════════
+
+_PATH_RE   = re.compile(r"[\w/\\]+\.java")
+_LINENO_RE = re.compile(r":\d+[,:]")  # e.g.  :42, or :42:
+
+def _normalize_error(raw: str) -> str:
+    """Strip file paths and line numbers so embeddings focus on the error semantics."""
+    text = _PATH_RE.sub("<FILE>", raw)
+    text = _LINENO_RE.sub("", text)
+    return text.strip()
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # Public API
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -164,8 +179,9 @@ def store_fix_if_confident(
         return
 
     try:
+        normalized = _normalize_error(error)
         embedder  = get_embedder()
-        vector    = embedder([error])[0]
+        vector    = embedder([normalized])[0]
         client    = get_vector_db()
         payload   = {"java_version": java_version, "error": error, "fix": fix}
 
@@ -177,7 +193,7 @@ def store_fix_if_confident(
 
     except Exception as exc:
         # Never crash the main pipeline because of a VectorDB write failure
-        logger.warning(f"[fix_knowledge] store_fix_if_confident failed: {exc}")
+        logger.warning(f"[fix_knowledge] store_fix_if_confident failed: {exc}", exc_info=True)
 
 
 def search_similar_fix(
@@ -194,8 +210,10 @@ def search_similar_fix(
         return None
 
     try:
+        normalized = _normalize_error(error)
+        logger.info(f"[fix_knowledge] Searching VDB for: {normalized[:100]}")
         embedder  = get_embedder()
-        vector    = embedder([error])[0]
+        vector    = embedder([normalized])[0]
         client    = get_vector_db()
 
         provider = settings.VECTOR_DB_PROVIDER.lower()
@@ -210,11 +228,12 @@ def search_similar_fix(
             )
             return fix
 
-        logger.debug(
-            f"[fix_knowledge] No fix above threshold (best score={score:.3f})"
+        logger.info(
+            f"[fix_knowledge] No fix above threshold "
+            f"(best score={score:.3f}, threshold={threshold})"
         )
         return None
 
     except Exception as exc:
-        logger.warning(f"[fix_knowledge] search_similar_fix failed: {exc}")
+        logger.warning(f"[fix_knowledge] search_similar_fix failed: {exc}", exc_info=True)
         return None
