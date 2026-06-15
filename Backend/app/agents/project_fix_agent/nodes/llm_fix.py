@@ -27,6 +27,7 @@ from app.core.config import settings
 from app.agents.project_fix_agent.state import AgentState
 from app.agents.project_fix_agent.nodes.project_file_tools import build_project_file_tools
 from app.llm.llm_registry import build_llm_model
+from app.llm.fix_knowledge_store import search_similar_fix
 
 logger = logging.getLogger(__name__)
 
@@ -110,9 +111,15 @@ HUMAN_PROMPT_TEMPLATE = """## Compiler Errors — Iteration {iteration} ({error_
 
 ## Previous Iterations Summary
 {iteration_history}
-
+{known_fixes_section}
 Use your tools to fix ALL errors listed above. Start now:"""
 
+KNOWN_FIX_SECTION_TEMPLATE = """
+## Known Fix References (from past successful fixes)
+The following fixes were previously stored for similar errors.
+Use them as a starting reference — adapt as needed:
+{fixes}
+"""
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -187,12 +194,59 @@ def llm_fix_agent_node(state: AgentState, config: RunnableConfig) -> AgentState:
 
     iteration_history = _build_iteration_history(patches_applied)
 
+    # ── Query VectorDB for known fixes ────────────────────────────────────────
+    dispatch_custom_event(
+        "project_fix_trace",
+        {
+            "id":     f"vdb_search_{iteration}",
+            "status": "running",
+            "title":  "Querying Knowledge Base",
+            "detail": f"Searching for known fixes for {len(errors)} error(s)...",
+        },
+        config=config,
+    )
+
+    known_fix_lines: list[str] = []
+    matched_known_errors = list(state.get("matched_known_errors") or [])
+    for err in errors:
+        try:
+            ref = search_similar_fix(err["error_code"])
+            if ref:
+                known_fix_lines.append(
+                    f"- Error: {err['error_code'][:120]}\n  Known fix: {ref}"
+                )
+                if err["error_code"] not in matched_known_errors:
+                    matched_known_errors.append(err["error_code"])
+        except Exception as exc:
+            logger.debug(f"[project_fix/llm_fix] VectorDB search failed: {exc}")
+
+    dispatch_custom_event(
+        "project_fix_trace",
+        {
+            "id":     f"vdb_search_{iteration}",
+            "status": "completed",
+            "title":  "Knowledge Base Queried",
+            "detail": f"Found {len(known_fix_lines)} matching known fix(es).",
+        },
+        config=config,
+    )
+
+    known_fixes_section = ""
+    if known_fix_lines:
+        known_fixes_section = KNOWN_FIX_SECTION_TEMPLATE.format(
+            fixes="\n".join(known_fix_lines)
+        )
+        logger.info(
+            f"[project_fix/llm_fix] Injecting {len(known_fix_lines)} known fix reference(s) into prompt"
+        )
+
     human_prompt = HUMAN_PROMPT_TEMPLATE.format(
         iteration=iteration,
         error_count=len(errors),
         error_list=_format_error_list(errors),
         context_window=context,
         iteration_history=iteration_history,
+        known_fixes_section=known_fixes_section,
     )
 
     token_estimate = (len(SYSTEM_PROMPT) + len(human_prompt)) // 4
@@ -217,8 +271,13 @@ def llm_fix_agent_node(state: AgentState, config: RunnableConfig) -> AgentState:
     try:
         messages = [
             SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=human_prompt),
         ]
+        
+        if getattr(settings, "INCLUDE_FULL_HISTORY", False):
+            past_msgs = state.get("past_messages") or []
+            messages.extend(past_msgs)
+            
+        messages.append(HumanMessage(content=human_prompt))
 
         tools_called: list[str] = []
         files_patched: list[str] = []          # track which files were written this iteration
@@ -403,6 +462,12 @@ def llm_fix_agent_node(state: AgentState, config: RunnableConfig) -> AgentState:
                 updated_summary = "\n".join(updated_summary.splitlines()[-4:])
         else:
             updated_summary = fix_summary
+            
+        all_fixed = list(state.get("all_errors_fixed") or [])
+        # Append errors we are trying to fix right now, avoiding exact duplicates
+        for e in errors:
+            if e not in all_fixed:
+                all_fixed.append(e)
 
         dispatch_custom_event(
             "project_fix_trace",
@@ -415,13 +480,20 @@ def llm_fix_agent_node(state: AgentState, config: RunnableConfig) -> AgentState:
             config=config,
         )
 
-        return {
+        return_state = {
             **state,
             "patches_applied": patches_applied,
             "fix_summary":     updated_summary,
             "token_usage":     state.get("token_usage", []),
             "full_diff":       state.get("full_diff", ""),
+            "matched_known_errors": matched_known_errors,
+            "all_errors_fixed": all_fixed,
         }
+        
+        if getattr(settings, "INCLUDE_FULL_HISTORY", False):
+            return_state["past_messages"] = messages[1:]
+            
+        return return_state
 
     except Exception as e:
         logger.error(f"[project_fix/llm_fix] LLM call failed: {e}")

@@ -65,6 +65,29 @@ def _find_work_dir(work_dir: str) -> str:
     return work_dir
 
 
+def _detect_java_version(work_dir: str) -> str:
+    """
+    Detect the Java version from pom.xml <java.version> or
+    <maven.compiler.source>. Falls back to "unknown".
+    """
+    import re
+    root = Path(work_dir)
+    for pom in root.rglob("pom.xml"):
+        try:
+            text = pom.read_text(encoding="utf-8", errors="ignore")
+            for pattern in (
+                r"<java\.version>\s*([\d.]+)\s*</java\.version>",
+                r"<maven\.compiler\.source>\s*([\d.]+)\s*</maven\.compiler\.source>",
+                r"<source>\s*([\d.]+)\s*</source>",
+            ):
+                m = re.search(pattern, text)
+                if m:
+                    return m.group(1).strip()
+        except Exception:
+            pass
+    return "unknown"
+
+
 def compile_node(state: AgentState, config: RunnableConfig) -> AgentState:
     """
     LangGraph node: run the compiler.

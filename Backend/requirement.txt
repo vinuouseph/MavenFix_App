@@ -22,3 +22,5 @@ pandas
 openpyxl
 langchain_huggingface
 markdown
+qdrant-client
+pymilvus
