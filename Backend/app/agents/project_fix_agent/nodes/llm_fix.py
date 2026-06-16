@@ -75,15 +75,17 @@ SPRING BOOT 2.x → 3.x MIGRATION PATTERNS (apply ALL of these when relevant):
 
 ANTI-THRASHING RULES (CRITICAL — follow these to avoid infinite loops):
   1. NEVER patch the same file more than ONCE per turn. Read it, fix EVERYTHING, write ONCE.
-  2. If TWO config files both define the same @Bean (e.g. SecurityFilterChain), you MUST
-     consolidate them: keep ONE file with the full config, and EMPTY the other file
-     (replace its entire content with just the package declaration and no class body).
-  3. Do NOT call list_project_files more than once — the file tree does not change.
-  4. Do NOT call create_new_file for a file that already exists. If you get a SKIPPED
-     response, the file exists — use read_file_lines + write_file_lines instead.
-  5. If the Previous Iterations Summary says a file has been patched 3+ times and STILL
-     has errors, your previous approach is WRONG. Read the ENTIRE file (lines 1 to end)
-     and REWRITE it completely with correct code.
+  2. SECURITY CONFIG: There must be EXACTLY ONE class annotated with @EnableWebSecurity
+     in the entire project. If two files define SecurityFilterChain @Bean, consolidate into
+     ONE file and replace the other file's class body with just the package declaration.
+  3. READING LARGE FILES: Use read_file_lines in 150-line chunks for large files.
+     Example: read lines 1-150, then 151-300, then 301-450 etc. Never skip reading first.
+  4. Do NOT call list_project_files more than once — the file tree does not change.
+  5. Do NOT call create_new_file for a file that already exists. If you get a SKIPPED
+     or REDIRECTED response, the file exists — use write_file_lines on the shown content.
+  6. If the Previous Iterations Summary says a file has been patched 3+ times and STILL
+     has errors, your previous approach is WRONG. Read the FULL file in chunks and REWRITE
+     it completely with correct code.
 
 RULES:
   1. FIX ALL ERRORS in this response — do not leave any unaddressed.
@@ -94,7 +96,7 @@ RULES:
      in EVERY file in ONE pass.
   6. CASCADING ERRORS: Fix every error in the current list — including secondary effects.
   7. IMPORT ERRORS: Fix ALL broken imports in a file in a SINGLE write_file_lines call.
-     Read the FULL import block (lines 1-20 typically), then write back ALL corrected imports.
+     Read the FULL import block first (usually lines 1-30), then write back ALL corrected imports.
   8. MISSING CLASSES: Use create_new_file for any missing DTOs, configs, or exceptions.
   9. You may call multiple tools in sequence within one response — they execute in order.
      Use as many tool calls as needed — do NOT stop early.
@@ -127,7 +129,7 @@ def _format_error_list(errors: list[dict]) -> str:
     return "\n".join(f"  - {e['file_path']}:{e['line_no']} — {e['error_code']}" for e in errors)
 
 
-def _build_iteration_history(patches_applied: list[dict]) -> str:
+def _build_iteration_history(patches_applied: list[dict], global_write_counts: dict | None = None) -> str:
     """Build a detailed history showing what files were patched and how many times."""
     if not patches_applied:
         return "  No fixes applied yet."
@@ -155,7 +157,7 @@ def _build_iteration_history(patches_applied: list[dict]) -> str:
         suffix = f" — {errors_after} error(s) remaining" if errors_after is not None else ""
         lines.append(f"  [Iter {itr}] {detail}{suffix}")
 
-    # Add STUCK FILE warnings
+    # Per-iteration stuck warning (patched 3+ times across logged history)
     stuck_files = [f for f, c in file_patch_counts.items() if c >= 3]
     if stuck_files:
         lines.append("")
@@ -163,8 +165,18 @@ def _build_iteration_history(patches_applied: list[dict]) -> str:
         for f in stuck_files:
             count = file_patch_counts[f]
             lines.append(f"    • {f} — patched {count} times. Your previous approach is NOT working.")
-        lines.append("    → Read these files FULLY and REWRITE them completely with correct code.")
+        lines.append("    → Read these files FULLY in chunks and REWRITE them completely with correct code.")
         lines.append("    → If two files define the same @Bean, consolidate into ONE file.")
+
+    # Cross-iteration global stuck warning (written 5+ times total)
+    if global_write_counts:
+        global_stuck = [f for f, c in global_write_counts.items() if c >= 5]
+        if global_stuck:
+            lines.append("")
+            lines.append("  🔴 GLOBALLY STUCK FILES (written 5+ times across ALL iterations — CRITICAL):")
+            for f in global_stuck:
+                lines.append(f"    • {f} — written {global_write_counts[f]} times total. STOP repeating the same fix.")
+            lines.append("    → Read the ENTIRE file fresh. Identify the REAL root cause. Apply a completely different fix.")
 
     return "\n".join(lines)
 
@@ -192,7 +204,10 @@ def llm_fix_agent_node(state: AgentState, config: RunnableConfig) -> AgentState:
     patches_applied = list(state.get("patches_applied") or [])
     fix_summary     = state.get("fix_summary", "")
 
-    iteration_history = _build_iteration_history(patches_applied)
+    iteration_history = _build_iteration_history(
+        patches_applied,
+        global_write_counts=state.get("global_write_counts") or {}
+    )
 
     # ── Query VectorDB for known fixes ────────────────────────────────────────
     dispatch_custom_event(
@@ -282,7 +297,8 @@ def llm_fix_agent_node(state: AgentState, config: RunnableConfig) -> AgentState:
         tools_called: list[str] = []
         files_patched: list[str] = []          # track which files were written this iteration
         _list_cache: str | None = None         # cache list_project_files result
-        _writes_per_file: dict[str, int] = {}  # cap writes per file
+        _writes_per_file: dict[str, int] = {}  # cap writes per file this iteration
+        global_write_counts: dict[str, int] = dict(state.get("global_write_counts") or {})
 
         for step in range(12):
             response = llm_with_tools.invoke(messages)
@@ -382,18 +398,18 @@ def llm_fix_agent_node(state: AgentState, config: RunnableConfig) -> AgentState:
                         tool_results_executed = True
                         continue
 
-                # ── Guardrail: block duplicate config class creation ───────────
+                # ── Guardrail: block duplicate Security/Config class creation ────
                 if tool_name == "create_new_file":
                     fpath = tool_args.get("relative_path", "")
+                    new_content = tool_args.get("content", "")
                     if fpath.endswith(".java"):
                         import os as _os
                         new_dir  = _os.path.dirname(fpath)
                         new_base = _os.path.basename(fpath).replace(".java", "").lower()
-                        # Check for similarly-named files in the same package
+                        # 1. Same-directory name clash
                         for existing in files_patched:
                             if _os.path.dirname(existing) == new_dir:
                                 existing_base = _os.path.basename(existing).replace(".java", "").lower()
-                                # e.g. "securityconfigrewritten" vs "securityconfig"
                                 if existing_base in new_base or new_base in existing_base:
                                     logger.warning(f"[project_fix/llm_fix] Blocking duplicate config creation: {fpath} (similar to {existing})")
                                     messages.append(ToolMessage(
@@ -404,6 +420,36 @@ def llm_fix_agent_node(state: AgentState, config: RunnableConfig) -> AgentState:
                                     ))
                                     tool_results_executed = True
                                     break
+                        # 2. Cross-package @Bean SecurityFilterChain / @EnableWebSecurity guard
+                        if not tool_results_executed and (
+                            "SecurityFilterChain" in new_content
+                            or "@EnableWebSecurity" in new_content
+                        ):
+                            from pathlib import Path as _Path
+                            _security_markers = ("@EnableWebSecurity", "SecurityFilterChain")
+                            for _existing_file in _Path(work_dir).rglob("*.java"):
+                                try:
+                                    _text = _existing_file.read_text(encoding="utf-8", errors="ignore")
+                                    if any(m in _text for m in _security_markers):
+                                        _rel = str(_existing_file.relative_to(_Path(work_dir)))
+                                        logger.warning(
+                                            f"[project_fix/llm_fix] Blocking duplicate SecurityConfig: "
+                                            f"{fpath} conflicts with existing {_rel}"
+                                        )
+                                        messages.append(ToolMessage(
+                                            content=(
+                                                f"GUARDRAIL: Cannot create {fpath} — a Spring Security "
+                                                f"configuration already exists at '{_rel}'. "
+                                                f"There must be exactly ONE @EnableWebSecurity class. "
+                                                f"Use read_file_lines + write_file_lines to fix the EXISTING "
+                                                f"file instead of creating a duplicate."
+                                            ),
+                                            tool_call_id=tool_id, name=tool_name
+                                        ))
+                                        tool_results_executed = True
+                                        break
+                                except Exception:
+                                    pass
                         if not tool_results_executed and tool_name == "create_new_file":
                             pass  # allow creation to proceed below
                         elif tool_results_executed:
@@ -426,23 +472,35 @@ def llm_fix_agent_node(state: AgentState, config: RunnableConfig) -> AgentState:
                     # ── Guardrail: redirect SKIPPED create_new_file → auto-read ─
                     if tool_name == "create_new_file" and result_str.startswith("SKIPPED"):
                         fpath = tool_args.get("relative_path", "")
-                        # Auto-read the existing file so the LLM has its content
+                        # Auto-read the FULL existing file (paginated via the updated tool)
                         try:
+                            from pathlib import Path as _Path
+                            _total = len((_Path(work_dir) / fpath).read_text(
+                                encoding="utf-8", errors="ignore"
+                            ).splitlines())
+                            # Read up to 600 lines (4 chunks × 150)
                             read_result = tool_map["read_file_lines"].invoke({
-                                "relative_path": fpath, "start_line": 1, "end_line": 300
+                                "relative_path": fpath, "start_line": 1, "end_line": min(_total, 600)
                             })
+                            truncation_note = (
+                                f"\n\n[File has {_total} lines total — "
+                                f"call read_file_lines again with start_line=601 if needed]"
+                                if _total > 600 else ""
+                            )
                             result_str = (
                                 f"REDIRECTED: {fpath} already exists. Here is its current content — "
-                                f"use write_file_lines to modify it:\n\n{read_result}"
+                                f"use write_file_lines to modify it:\n\n{read_result}{truncation_note}"
                             )
                         except Exception:
                             pass
 
-                    # Track file patching for history
+                    # Track file patching for history + global cross-iteration counts
                     if tool_name == "write_file_lines":
                         fpath = tool_args.get("relative_path", "")
                         if fpath and fpath not in files_patched:
                             files_patched.append(fpath)
+                        if fpath:
+                            global_write_counts[fpath] = global_write_counts.get(fpath, 0) + 1
                     elif tool_name == "create_new_file" and not result_str.startswith(("SKIPPED", "REDIRECTED")):
                         fpath = tool_args.get("relative_path", "")
                         if fpath and fpath not in files_patched:
@@ -515,6 +573,7 @@ def llm_fix_agent_node(state: AgentState, config: RunnableConfig) -> AgentState:
             "full_diff":       state.get("full_diff", ""),
             "matched_known_errors": matched_known_errors,
             "all_errors_fixed": all_fixed,
+            "global_write_counts": global_write_counts,
         }
         
         if getattr(settings, "INCLUDE_FULL_HISTORY", False):

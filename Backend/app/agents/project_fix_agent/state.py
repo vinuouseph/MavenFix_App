@@ -32,6 +32,7 @@ class AgentState(TypedDict):
     fix_summary: str
     seen_fingerprints: list[str]
     fingerprint_counts: dict
+    global_write_counts: dict          # cumulative writes per file across ALL iterations
 
     # ── Terminal ──────────────────────────────────────────────────────────
     status: str                        # "running" | "success" | "abort" | "escalate"

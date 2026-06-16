@@ -217,19 +217,47 @@ def build_context_node(state: AgentState, config: RunnableConfig) -> AgentState:
             for e in sorted(file_errors, key=lambda x: x["line_no"])
         )
 
-        if is_stuck and total <= 200:
-            # ── STUCK FILE: include FULL file content for complete rewrite ──
-            full_content = "".join(
-                f"{i+1:4d} | {line.rstrip()}\n" for i, line in enumerate(all_lines)
-            )
-            sections.append(
-                f"## ⚠️ STUCK FILE: {rel_path} ({total} lines total) — patched {max_repeat}x, STILL has errors\n"
-                f"### YOUR PREVIOUS PATCHES ARE NOT WORKING. Read the FULL file and REWRITE it correctly.\n"
-                f"### If another file defines the same @Bean, consolidate into ONE file and empty the other.\n"
-                f"### Errors:\n{error_notes}\n"
-                f"### FULL FILE CONTENT:\n"
-                f"```\n{full_content}\n```"
-            )
+        if is_stuck:
+            if total <= 300:
+                # ── STUCK FILE (small): include FULL file content for complete rewrite ──
+                full_content = "".join(
+                    f"{i+1:4d} | {line.rstrip()}\n" for i, line in enumerate(all_lines)
+                )
+                sections.append(
+                    f"## ⚠️ STUCK FILE: {rel_path} ({total} lines total) — patched {max_repeat}x, STILL has errors\n"
+                    f"### YOUR PREVIOUS PATCHES ARE NOT WORKING. Read the FULL file and REWRITE it correctly.\n"
+                    f"### If another file defines the same @Bean, consolidate into ONE file and empty the other.\n"
+                    f"### Errors:\n{error_notes}\n"
+                    f"### FULL FILE CONTENT:\n"
+                    f"```\n{full_content}\n```"
+                )
+            else:
+                # ── STUCK FILE (large): include first 150 lines + error-site slices + guidance ──
+                head_content = "".join(
+                    f"{i+1:4d} | {all_lines[i].rstrip()}\n" for i in range(min(150, total))
+                )
+                # Error-site slices (±40 lines around each error)
+                error_slices: list[str] = []
+                for ln in sorted(error_lines):
+                    rs = max(1, ln - 40)
+                    re_ = min(total, ln + 40)
+                    slice_lines = []
+                    for i in range(rs - 1, re_):
+                        marker = ">>>" if (i + 1) in error_lines else "   "
+                        slice_lines.append(f"{marker} {i+1:4d} | {all_lines[i].rstrip()}")
+                    error_slices.append("\n".join(slice_lines))
+                error_slice_str = "\n\n".join(error_slices)
+                sections.append(
+                    f"## ⚠️ STUCK FILE: {rel_path} ({total} lines total) — patched {max_repeat}x, STILL has errors\n"
+                    f"### YOUR PREVIOUS PATCHES ARE NOT WORKING.\n"
+                    f"### Use read_file_lines in 150-line chunks to read the full file, then REWRITE correctly.\n"
+                    f"### Errors:\n{error_notes}\n"
+                    f"### First 150 lines of file:\n"
+                    f"```\n{head_content}\n```\n"
+                    f"### Code around error sites (>>> marks error lines):\n"
+                    f"```\n{error_slice_str}\n```\n"
+                    f"### Read remainder: call read_file_lines('{rel_path}', 151, 300) then (301, 450) etc."
+                )
         else:
             # ── Normal context: ±N lines around each error site ──
             ctx = min(CONTEXT_LINES_AROUND * max_repeat, 80)

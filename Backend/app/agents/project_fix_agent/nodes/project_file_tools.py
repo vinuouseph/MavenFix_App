@@ -156,30 +156,65 @@ def build_project_file_tools(work_dir: str, state_ref: dict = None) -> list:
     # ── TOOL 2: read_file_lines ────────────────────────────────────────────────
 
     def _read_file_lines(relative_path: str, start_line: int, end_line: int) -> str:
-        """Return a numbered line range from any source file."""
+        """Return a numbered line range from any source file. Auto-paginates large ranges."""
         abs_path = work_path / relative_path
         if not abs_path.exists():
             return f"ERROR: file not found: {relative_path}"
         if start_line < 1 or end_line < start_line:
             return "ERROR: start_line must be >= 1 and end_line must be >= start_line"
-        if (end_line - start_line + 1) > _MAX_READ_LINES:
-            return (
-                f"ERROR: requested range spans {end_line - start_line + 1} lines "
-                f"(max {_MAX_READ_LINES}). Narrow the range."
-            )
 
         try:
             all_lines = abs_path.read_text(encoding="utf-8", errors="replace").splitlines()
-            actual_end = min(end_line, len(all_lines))
-            selected = all_lines[start_line - 1: actual_end]
+            total_lines = len(all_lines)
+            actual_end = min(end_line, total_lines)
 
-            if not selected:
+            if actual_end < start_line:
                 return (
                     f"ERROR: line range {start_line}-{end_line} is out of range "
-                    f"(file has {len(all_lines)} lines)"
+                    f"(file has {total_lines} lines)"
                 )
 
-            header = f"// {relative_path}  [lines {start_line}-{actual_end} of {len(all_lines)}]\n"
+            requested_span = actual_end - start_line + 1
+
+            # Auto-paginate if the requested span exceeds the per-chunk limit.
+            # Return all chunks concatenated so the LLM always gets the full range.
+            _CHUNK_SIZE = 150
+            _MAX_CHUNKS = 4   # cap at 600 lines total to stay within token budget
+
+            if requested_span > _CHUNK_SIZE:
+                chunks = []
+                chunk_start = start_line
+                chunks_returned = 0
+                while chunk_start <= actual_end and chunks_returned < _MAX_CHUNKS:
+                    chunk_end = min(chunk_start + _CHUNK_SIZE - 1, actual_end)
+                    selected = all_lines[chunk_start - 1: chunk_end]
+                    header = (
+                        f"// {relative_path}  "
+                        f"[lines {chunk_start}-{chunk_end} of {total_lines}]\n"
+                    )
+                    numbered = "\n".join(
+                        f"{chunk_start + i}: {line}" for i, line in enumerate(selected)
+                    )
+                    chunks.append(header + numbered)
+                    chunk_start = chunk_end + 1
+                    chunks_returned += 1
+
+                if chunk_start <= actual_end:
+                    chunks.append(
+                        f"// {relative_path}  [TRUNCATED — only first "
+                        f"{_MAX_CHUNKS * _CHUNK_SIZE} of {requested_span} lines shown. "
+                        f"Call read_file_lines again with start_line={chunk_start} to read more.]"
+                    )
+
+                logger.info(
+                    f"[project_file_tools] read_file_lines (paginated): {relative_path} "
+                    f"lines {start_line}-{actual_end} in {chunks_returned} chunk(s)"
+                )
+                return "\n\n".join(chunks)
+
+            # Normal single-chunk read
+            selected = all_lines[start_line - 1: actual_end]
+            header = f"// {relative_path}  [lines {start_line}-{actual_end} of {total_lines}]\n"
             numbered = "\n".join(
                 f"{start_line + i}: {line}" for i, line in enumerate(selected)
             )
