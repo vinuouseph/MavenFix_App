@@ -7,7 +7,8 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
-  const isLandingPage = pathname === '/';
+  const bp = process.env.NEXT_PUBLIC_BASE_PATH || '';
+  const isLandingPage = pathname === '/' || pathname === bp || pathname === `${bp}/`;
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20);
@@ -15,7 +16,6 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handler);
   }, []);
 
-  const bp = process.env.NEXT_PUBLIC_BASE_PATH || '';
   // Note: When `basePath` is set in next.config.js, Next.js <Link> automatically
   // prepends the basePath to all internal hrefs. DO NOT manually add bp to Link hrefs.
 

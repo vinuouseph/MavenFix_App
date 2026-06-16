@@ -18,13 +18,14 @@ from app.workers.models import SpringFixKafka, SpringFixResult
 from app.db_configs.db_configuration import SessionLocal
 from app.repository.git_repo_repository import GitRepoRepository
 
-broker = KafkaBroker(settings.kafka_bootstrap_servers, max_poll_interval_ms=3600000)
+broker = KafkaBroker(settings.kafka_bootstrap_servers)
 app = FastStream(broker)
 
 @broker.subscriber(
     "spring_fix",
     group_id="analytics_service_group",
     ack_policy=AckPolicy.MANUAL,
+    max_poll_interval_ms=3600000,
 )
 async def process_user_event(
     msg: KafkaMessage,

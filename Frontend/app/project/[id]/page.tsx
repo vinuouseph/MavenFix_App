@@ -113,9 +113,16 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (!projectId) return;
 
-    // Route SSE through the Next.js /api rewrite proxy (same as all other API calls)
-    const sseBase = (process.env.NEXT_PUBLIC_API_URL) ||
-      `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api`;
+    // Route SSE directly to the backend to avoid Next.js buffering
+    let sseBase = process.env.NEXT_PUBLIC_API_URL || '';
+    if (!sseBase) {
+      const bp = process.env.NEXT_PUBLIC_BASE_PATH || '';
+      if (bp.includes('/proxy/3000')) {
+        sseBase = bp.replace('/proxy/3000', '/proxy/8001');
+      } else {
+        sseBase = `${bp}/api`;
+      }
+    }
     const sseUrl = `${sseBase}/git/stream/${projectId}`;
     const es = new EventSource(sseUrl);
 
