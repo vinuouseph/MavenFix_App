@@ -67,7 +67,7 @@ export default function Navbar() {
           </div>
           <span
             style={{
-              fontSize: 20,
+              fontSize: 18,
               fontWeight: 800,
               background: 'linear-gradient(135deg, #10b981, #06b6d4)',
               WebkitBackgroundClip: 'text',
@@ -75,7 +75,7 @@ export default function Navbar() {
               backgroundClip: 'text',
             }}
           >
-            MavenFix
+            Vulnerability Remediation
           </span>
           <span
             style={{
@@ -100,12 +100,12 @@ export default function Navbar() {
               { label: 'Features', href: '#features' },
               { label: 'How It Works', href: '#how-it-works' },
               { label: 'Tech Stack', href: '#tech-stack' },
-            ] : []),
-            { label: 'Architecture', href: '/architecture' },
+            ] : [ { label: 'Architecture', href: '/architecture' },
             { label: 'Token Analysis', href: '/analytics' },
             { label: 'Schedules', href: '/schedules' },
             { label: 'Approvals History', href: '/approvals' },
-            { label: 'Execution History', href: '/executions' },
+            { label: 'Execution History', href: '/executions' }]),
+           
           ].map((item) => (
             <Link
               key={item.label}

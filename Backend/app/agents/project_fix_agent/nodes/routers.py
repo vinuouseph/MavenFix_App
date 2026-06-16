@@ -10,7 +10,7 @@ from app.agents.project_fix_agent.state import AgentState
 
 logger = logging.getLogger(__name__)
 
-_STUCK_THRESHOLD = 3    # how many times the same fingerprint before "stuck"
+_STUCK_THRESHOLD = 10    # how many times the same fingerprint before "stuck"
 
 
 # ── Conditional router: after parse_errors ─────────────────────────────────────

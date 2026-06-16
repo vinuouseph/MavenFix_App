@@ -19,6 +19,7 @@ class Settings:
     llm_api_key : str = os.getenv("LLM_API_KEY", "")
     llm_base_url : str = os.getenv("LLM_BASE_URL", "")
     llm_max_tokens : int = int(os.getenv("LLM_MAX_TOKENS", 2048))
+    llm_max_tokens : int = int(os.getenv("LLM_MAX_TOKENS", 2048))
     _raw_temp = os.getenv("LLM_TEMPERATURE")
     llm_temperature: float | None = (
         float(_raw_temp) if _raw_temp is not None and float(_raw_temp) != -10 else None

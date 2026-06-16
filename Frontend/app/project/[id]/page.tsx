@@ -122,7 +122,7 @@ export default function ProjectDetailPage() {
     // Extract everything up to and including "/proxy/3000" (or similar prefix)
     const proxyMatch = rawPath.match(/^(.*\/proxy\/\d+)/);
     const basePath = proxyMatch ? proxyMatch[1] : (process.env.NEXT_PUBLIC_BASE_PATH || '');
-    const sseUrl = `${origin}${basePath}/api/stream/${projectId}`;
+    const sseUrl = `${origin}${basePath}/api/git/stream/${projectId}`;
     const es = new EventSource(sseUrl);
 
     es.onmessage = (e) => {
