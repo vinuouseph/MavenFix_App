@@ -113,15 +113,11 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (!projectId) return;
 
-    // Route SSE directly to the backend to avoid Next.js buffering
-    let sseUrl = '';
-    if (typeof window !== 'undefined' && window.location.pathname.includes('/proxy/3000')) {
-      const proxyBase = window.location.pathname.split('/proxy/3000')[0];
-      sseUrl = `${proxyBase}/proxy/8001/git/stream/${projectId}`;
-    } else {
-      const sseBase = process.env.NEXT_PUBLIC_API_URL || `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api`;
-      sseUrl = `${sseBase}/git/stream/${projectId}`;
-    }
+    // Use a dedicated streaming API route that pipes the backend SSE without buffering.
+    // The basePath is automatically prepended by Next.js <Link> and router, but for
+    // raw URLs we must add it explicitly.
+    const bp = process.env.NEXT_PUBLIC_BASE_PATH || '';
+    const sseUrl = `${bp}/api/stream/${projectId}`;
     const es = new EventSource(sseUrl);
 
     es.onmessage = (e) => {

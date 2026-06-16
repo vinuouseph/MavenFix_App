@@ -21,7 +21,7 @@ def build_llm_model():
     # Base configuration common to most models
     base_config = {
         "model": model,
-        "max_tokens": 8192,
+        "max_tokens": settings.llm_max_tokens,
     }
 
     # Use None as the sentinel value in your settings instead of -10
