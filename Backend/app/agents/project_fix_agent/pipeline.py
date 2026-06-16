@@ -139,6 +139,7 @@ def get_initial_state(project_path : str, build_args: str = None) -> dict:
         "fix_summary": "",
         "seen_fingerprints": [],
         "fingerprint_counts": {},
+        "global_write_counts": {},
         "status": "running",
         "final_message": "",
         "vuln_summary": "",

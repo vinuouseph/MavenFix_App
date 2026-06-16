@@ -74,22 +74,28 @@ async def stream_project_pipeline(project_id: int, db: Session = Depends(get_db)
                 yield ": heartbeat\n\n"
                 await asyncio.sleep(0.5)
                 continue
-            
+
             with open(log_file_path, "r") as f:
                 f.seek(last_pos)
-                lines = f.readlines()
+                new_lines = f.readlines()
                 last_pos = f.tell()
 
-            if not lines:
-                # Keep-alive ping when there's no new data
+            if not new_lines:
+                # Keep-alive ping when there is no new data
                 yield ": heartbeat\n\n"
             else:
-                for line in lines:
+                for line in new_lines:
                     yield line
-                    if "success" in line or "abort" in line or "escalate" in line or "pre_compile_failed" in line:
-                        if '\"type\": \"trace\"' in line and ('\"id\": \"success\"' in line or '\"id\": \"abort\"' in line or '\"id\": \"escalate\"' in line or '\"id\": \"pre_compile_failed\"' in line):
-                            return
-            
+                    is_terminal = (
+                        '"type": "trace"' in line
+                        and any(
+                            f'"id": "{t}"' in line
+                            for t in ("success", "abort", "escalate", "pre_compile_failed")
+                        )
+                    )
+                    if is_terminal:
+                        return
+
             await asyncio.sleep(0.5)
 
     return StreamingResponse(
