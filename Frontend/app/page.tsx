@@ -55,7 +55,7 @@ export default function LandingPage() {
               </svg>
             </div>
             <span style={{ fontSize: 15, fontWeight: 700, color: '#94a3b8' }}>
-              MavenFix <span style={{ color: '#475569', fontWeight: 400 }}>AI Platform</span>
+              Vulnerability Remediation <span style={{ color: '#475569', fontWeight: 400 }}>AI Platform</span>
             </span>
           </div>
           <p style={{ fontSize: 13, color: '#334155' }}>

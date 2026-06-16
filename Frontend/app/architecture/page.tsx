@@ -12,7 +12,7 @@ export default function ArchitecturePage() {
             Pipeline Architecture
           </h1>
           <p style={{ color: '#94a3b8', maxWidth: 600, margin: '0 auto', fontSize: 15, lineHeight: 1.6 }}>
-            A visualization of the LangGraph AI workflow powering MavenFix. The system autonomously compiles your project, parses errors, builds context, and writes patches iteratively until the build succeeds.
+            A visualization of the LangGraph AI workflow powering Vulnerability Remediation. The system autonomously compiles your project, parses errors, builds context, and writes patches iteratively until the build succeeds.
           </p>
         </div>
 

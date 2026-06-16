@@ -73,7 +73,7 @@ export default function AddProjectModal({ onClose, onSuccess }: Props) {
           <div>
             <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>Add New Project</h2>
             <p style={{ fontSize: 13, color: '#64748b' }}>
-              MavenFix will clone your repo and begin the fix pipeline automatically.
+              Vulnerability Remediation will clone your repo and begin the fix pipeline automatically.
             </p>
           </div>
           <button

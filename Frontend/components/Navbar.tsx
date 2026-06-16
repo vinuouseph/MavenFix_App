@@ -100,12 +100,12 @@ export default function Navbar() {
               { label: 'Features', href: '#features' },
               { label: 'How It Works', href: '#how-it-works' },
               { label: 'Tech Stack', href: '#tech-stack' },
-            ] : [ { label: 'Architecture', href: '/architecture' },
+            ] : [{ label: 'Architecture', href: '/architecture' },
             { label: 'Token Analysis', href: '/analytics' },
             { label: 'Schedules', href: '/schedules' },
             { label: 'Approvals History', href: '/approvals' },
             { label: 'Execution History', href: '/executions' }]),
-           
+
           ].map((item) => (
             <Link
               key={item.label}

@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import '../styles/globals.css';
 
 export const metadata: Metadata = {
-  title: 'MavenFix AI — Automated Maven Repair Platform',
+  title: 'Vulnerability Remediation AI — Automated Maven Repair Platform',
   description:
-    'MavenFix uses an advanced LangGraph AI pipeline to automatically detect and fix compilation errors in your Maven projects. Connect your Git repo, sit back, and let the AI do the work.',
+    'Vulnerability Remediation uses an advanced LangGraph AI pipeline to automatically detect and fix compilation errors in your Maven projects. Connect your Git repo, sit back, and let the AI do the work.',
   keywords: 'Maven, AI, automated fix, LangGraph, compiler errors',
 };
 

@@ -23,7 +23,7 @@ export default function TechStack() {
             Built on an <span className="gradient-text">enterprise stack</span>
           </h2>
           <p className="section-subtitle" style={{ margin: '0 auto' }}>
-            MavenFix is powered by battle-tested, production-grade technologies used
+            Vulnerability Remediation is powered by battle-tested, production-grade technologies used
             by leading engineering teams worldwide.
           </p>
         </div>

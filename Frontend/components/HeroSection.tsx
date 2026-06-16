@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
-const CODE_SNIPPET = `// MavenFix AI — Auto-fix in action
+const CODE_SNIPPET = `// Vulnerability Remediation AI — Auto-fix in action
 public class OrderService {
   
   private OrderRepository repo;
@@ -16,7 +16,7 @@ public class OrderService {
   }
 }
 
-// ✓ MavenFix detected 3 errors
+// ✓ Vulnerability Remediation detected 3 errors
 // ✓ Scanning pom.xml for vulnerabilities...
 // ✓ Patched 2 outdated dependencies
 // ✓ Running compiler (iteration 1/20)...
@@ -146,7 +146,7 @@ export default function HeroSection() {
                 maxWidth: 480,
               }}
             >
-              Connect your Git repository. MavenFix&apos;s LangGraph AI agent automatically
+              Connect your Git repository. Vulnerability Remediation&apos;s LangGraph AI agent automatically
               scans vulnerabilities, compiles, detects errors, and applies intelligent
               patches — all without manual intervention.
             </p>

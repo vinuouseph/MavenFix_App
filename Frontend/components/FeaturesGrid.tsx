@@ -76,7 +76,7 @@ const FEATURES = [
     ),
     title: 'Git Repository Integration',
     description:
-      'Just paste your Git repository URL. MavenFix clones, creates a working copy, runs the fix pipeline, and makes the corrected project available for download.',
+      'Just paste your Git repository URL. Vulnerability Remediation clones, creates a working copy, runs the fix pipeline, and makes the corrected project available for download.',
     color: '#06b6d4',
     bg: 'rgba(6,182,212,0.08)',
     border: 'rgba(6,182,212,0.2)',
@@ -97,7 +97,7 @@ export default function FeaturesGrid() {
             <span className="gradient-text">ship faster</span>
           </h2>
           <p className="section-subtitle" style={{ margin: '0 auto' }}>
-            MavenFix combines a powerful agentic pipeline, real-time streaming, and
+            Vulnerability Remediation combines a powerful agentic pipeline, real-time streaming, and
             enterprise-grade vulnerability scanning to automate the most tedious parts of
             Maven development.
           </p>

@@ -10,7 +10,7 @@ const STEPS = [
     ),
     title: 'Add Your Git Repo',
     description:
-      'Paste your Maven Git repository URL along with the project name. MavenFix clones it and sets up an isolated workspace.',
+      'Paste your Maven Git repository URL along with the project name. Vulnerability Remediation clones it and sets up an isolated workspace.',
     tags: ['Git Clone', 'Maven'],
     color: '#10b981',
   },

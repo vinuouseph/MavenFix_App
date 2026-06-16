@@ -76,7 +76,7 @@ export default function CTASection() {
               lineHeight: 1.7,
             }}
           >
-            Add your repository URL and let MavenFix&apos;s AI agent handle the rest —
+            Add your repository URL and let Vulnerability Remediation&apos;s AI agent handle the rest —
             from vulnerability scanning to iterative compilation fixes.
           </p>
 
