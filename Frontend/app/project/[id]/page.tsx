@@ -113,11 +113,16 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (!projectId) return;
 
-    // Use a dedicated streaming API route that pipes the backend SSE without buffering.
-    // The basePath is automatically prepended by Next.js <Link> and router, but for
-    // raw URLs we must add it explicitly.
-    const bp = process.env.NEXT_PUBLIC_BASE_PATH || '';
-    const sseUrl = `${bp}/api/stream/${projectId}`;
+    // Build the absolute SSE URL using the live browser origin + basePath.
+    // process.env.NEXT_PUBLIC_BASE_PATH is baked at build time and may be stale
+    // after a Jupyter session restart, so we derive the basePath from the current
+    // URL at runtime instead.
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const rawPath = typeof window !== 'undefined' ? window.location.pathname : '';
+    // Extract everything up to and including "/proxy/3000" (or similar prefix)
+    const proxyMatch = rawPath.match(/^(.*\/proxy\/\d+)/);
+    const basePath = proxyMatch ? proxyMatch[1] : (process.env.NEXT_PUBLIC_BASE_PATH || '');
+    const sseUrl = `${origin}${basePath}/api/stream/${projectId}`;
     const es = new EventSource(sseUrl);
 
     es.onmessage = (e) => {

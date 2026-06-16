@@ -65,9 +65,13 @@ async def stream_project_pipeline(project_id: int, db: Session = Depends(get_db)
     log_file_path = os.path.join(temp_directory_location, "pipeline_stream.log")
 
     async def event_generator():
+        # Send an immediate comment to flush headers through the proxy
+        yield ": connected\n\n"
         last_pos = 0
         while True:
             if not os.path.exists(log_file_path):
+                # Keep-alive ping so the proxy doesn't buffer or close idle connections
+                yield ": heartbeat\n\n"
                 await asyncio.sleep(0.5)
                 continue
             
@@ -76,15 +80,28 @@ async def stream_project_pipeline(project_id: int, db: Session = Depends(get_db)
                 lines = f.readlines()
                 last_pos = f.tell()
 
-            for line in lines:
-                yield line
-                if "success" in line or "abort" in line or "escalate" in line or "pre_compile_failed" in line:
-                    if '\"type\": \"trace\"' in line and ('\"id\": \"success\"' in line or '\"id\": \"abort\"' in line or '\"id\": \"escalate\"' in line or '\"id\": \"pre_compile_failed\"' in line):
-                        return
+            if not lines:
+                # Keep-alive ping when there's no new data
+                yield ": heartbeat\n\n"
+            else:
+                for line in lines:
+                    yield line
+                    if "success" in line or "abort" in line or "escalate" in line or "pre_compile_failed" in line:
+                        if '\"type\": \"trace\"' in line and ('\"id\": \"success\"' in line or '\"id\": \"abort\"' in line or '\"id\": \"escalate\"' in line or '\"id\": \"pre_compile_failed\"' in line):
+                            return
             
             await asyncio.sleep(0.5)
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-store, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",   # disables nginx buffering
+            "Content-Encoding": "none",   # prevent any proxy compression
+        },
+    )
 
 from sqlalchemy import func
 from app.db_configs.models import TokenAnalysis

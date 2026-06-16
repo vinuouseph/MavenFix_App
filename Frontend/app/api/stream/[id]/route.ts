@@ -13,30 +13,33 @@ export async function GET(
   const projectId = params.id;
   const backendUrl = `${BACKEND_URL}/git/stream/${projectId}`;
 
-  // Fetch the SSE stream from the backend
-  const backendRes = await fetch(backendUrl, {
-    headers: {
-      Accept: 'text/event-stream',
-      'Cache-Control': 'no-cache',
-    },
-    // @ts-expect-error – Node fetch supports duplex
-    duplex: 'half',
-  });
+  let backendRes: Response;
+  try {
+    backendRes = await fetch(backendUrl, {
+      headers: {
+        Accept: 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        // Tell backend not to compress — compression breaks SSE streaming
+        'Accept-Encoding': 'identity',
+      },
+    });
+  } catch {
+    return new Response('Failed to connect to backend', { status: 502 });
+  }
 
   if (!backendRes.ok || !backendRes.body) {
-    return new Response('Failed to connect to backend stream', {
-      status: backendRes.status,
-    });
+    return new Response('Backend stream unavailable', { status: backendRes.status });
   }
 
   // Pipe the body directly through — no buffering
   return new Response(backendRes.body, {
     status: 200,
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no', // disable nginx buffering
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-store, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',      // disable nginx buffering end-to-end
+      'Content-Encoding': 'none',      // prevent any proxy from compressing
     },
   });
 }
