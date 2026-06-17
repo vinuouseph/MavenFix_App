@@ -189,7 +189,7 @@ async def send_email(event: SpringFixResult) -> None:
     finally:
         db.close()
 
-    base_url = f"http://{settings.app_host}:{settings.app_port}"
+    base_url = f"https://{settings.app_host}/{settings.app_port}"
     approval_url = f"{base_url}/git/approve/{request_id}"
     rejection_url = f"{base_url}/git/reject/{request_id}"
     download_url = f"{base_url}/git/download-project/{event.code_repo_location}"
